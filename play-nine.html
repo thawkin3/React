@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Hello World</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-alpha.6/css/bootstrap.min.css" crossorigin="anonymous">
+    <!-- <link type="text/css" rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" /> -->
+    <link type="text/css" rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" />
+    <link href="https://fonts.googleapis.com/css?family=Bungee|Londrina+Outline|Ubuntu+Mono:400,700|Ubuntu:300,700" rel="stylesheet">
+    <style>
+      .mountNode {
+        color: #000;
+      }
+
+      .fa-star {
+        margin: 0.5em;
+        font-size: 24px;
+      }
+
+      .card {
+        flex-direction: row;
+        text-align: center;
+      }
+
+      .numberHolder {
+        margin: auto;
+      }
+
+      span {
+        display: inline-block;
+        margin: 0.5em;
+        text-align: center;
+        background-color: #ccc;
+        width: 24px;
+        border-radius: 50%;
+        cursor: pointer;
+      }
+
+      .selected {
+        background-color: #eee;
+        color: #ddd;
+        cursor: not-allowed;
+      }
+
+      .used {
+        background-color: #aaddaa;
+        color: #99bb99;
+        cursor: not-allowed;
+      }
+
+      .btn {
+        cursor: pointer;
+      }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.4/lodash.js"></script>
+    <script src="https://unpkg.com/react@latest/dist/react.js"></script>
+    <script src="https://unpkg.com/react-dom@latest/dist/react-dom.js"></script>
+    <script src="https://unpkg.com/babel-standalone@6.15.0/babel.min.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel">
+
+      // Function for checking if you have any valid moves left
+      var possibleCombinationSum = function (arr, n) {
+        if (arr.indexOf(n) != -1) { return true; }
+        if (arr[0] > n) { return false; }
+        if (arr[arr.length - 1] > n) {
+          arr.pop();
+          return possibleCombinationSum(arr, n);
+        }
+        var listSize = arr.length, combinationsCount = (1 << listSize);
+        for (var i = 1; i < combinationsCount ; i++ ) {
+          var combinationSum = 0;
+          for (var j=0 ; j < listSize ; j++) {
+            if (i & (1 << j)) { combinationSum += arr[j]; }
+          }
+          if (n === combinationSum) { return true; }
+        }
+        return false;
+      };
+
+      // Functional component to show a random number of stars
+      // Gets re-rendered anytime you click the redraw button or submit a correct answer
+      const Stars = (props) => {
+        return (
+          <div className="col-5">
+            {_.range(props.numberOfStars).map(i =>
+              <i key={i} className="fa fa-star"></i>
+            )}
+          </div>
+        );
+      }
+
+      // Functional component containing the buttons to check an answer, submit an answer, and redraw
+      const Button = (props) => {
+        let button;
+        switch (props.answerIsCorrect) {
+          case true:
+            button = 
+              <button className="btn btn-success" onClick={props.acceptAnswer}>
+                <i className="fa fa-check"></i>
+              </button>;
+            break;
+          case false:
+            button = 
+              <button className="btn btn-danger">
+                <i className="fa fa-times"></i>
+              </button>;
+            break;
+          default:
+            button = 
+              <button className="btn"
+                      disabled={props.selectedNumbers.length === 0}
+                      onClick={props.checkAnswer}>
+                =
+              </button>;
+        }
+        
+        return (
+          <div className="col-2 text-center">
+            {button}
+            <br /><br />
+            <button className="btn btn-warning btn-sm" onClick={props.redraw}
+                    disabled={props.redraws === 0 || props.doneStatus != null}>
+              <i className="fa fa-refresh"></i> {props.redraws}
+            </button>
+          </div>
+        );
+      }
+
+      // Functional component containing the selected numbers for this round
+      const Answer = (props) => {
+        return (
+          <div className="col-5">
+            {props.selectedNumbers.map((number, i) =>
+              <span key={i} onClick={() => props.unselectNumber(number)}>
+                {number}
+              </span>
+            )}
+          </div>
+        );
+      }
+
+      // Functional component containing the 1-9 numbers that you can choose from
+      // Has CSS classes for normal, selected, and used
+      const Numbers = (props) => {
+        const numberClassName = (number) => {
+          if (props.usedNumbers.indexOf(number) != -1) {
+            return 'used';
+          }
+          if (props.selectedNumbers.indexOf(number) != -1) {
+            return 'selected';
+          }
+        }
+        
+        return (
+          <div className="card text-center">
+            <div className="numberHolder">
+              {Numbers.list.map((number, i) =>
+                <span key={i} className={numberClassName(number)}
+                      onClick={() => props.selectNumber(number)}>
+                  {number}
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      Numbers.list = _.range(1, 10);
+
+      // Functional component that gets shown if you've won or lost the game
+      const DoneFrame = (props) => {
+        return (
+          <div className="text-center">
+            <h2>{props.doneStatus}</h2>
+            <button className="btn btn-secondary" onClick={props.resetGame}>
+              Play Again
+            </button>
+          </div>
+        );
+      }
+
+      // Class component that holds all the pieces of the game together
+      // Maintains the state and passes any needed data or functions to the child components as properties
+      class Game extends React.Component {
+        
+        // Returns the initial state since we use this at the beginning and when starting a new game, so this removes the need to duplicate code
+        static initialState = () => ({
+          selectedNumbers: [],
+          randomNumberOfStars: Game.randomNumber(),
+          usedNumbers: [],
+          answerIsCorrect: null,
+          redraws: 5,
+          doneStatus: null
+        });
+        
+        // Returns a random number. This is used in a few places within the Game class so this removes the need to duplicate code
+        static randomNumber = () => Math.floor(Math.random()*9) + 1;
+        
+        // State of the Game class, gets its value from the initialState function we defined above
+        state = Game.initialState();
+        
+        // Function for when you select a number
+        // If the number hasn't been selected or already used, change the state so that the answer hasn't been checked yet and the number gets added to your array of selected numbers
+        selectNumber = (clickedNumber) => {
+          if (this.state.selectedNumbers.indexOf(clickedNumber) != -1 || this.state.usedNumbers.indexOf(clickedNumber) != -1) {
+            return;
+          }
+          this.setState(prevState => ({
+            answerIsCorrect: null,
+            selectedNumbers: prevState.selectedNumbers.concat(clickedNumber)
+          }));
+        };
+        
+        // Function for when you unselect a number
+        // Removes the number from the selected numbers array and shows that the answer hasn't been checked yet
+        unselectNumber = (clickedNumber) => {
+          this.setState(prevState => ({
+            answerIsCorrect: null,
+            selectedNumbers: prevState.selectedNumbers.filter(number => number !== clickedNumber)
+          }));
+        };
+        
+        // Function to check your answer
+        // Returns true if the number of stars matches the sum of your selected numbers or false if it doesn't
+        checkAnswer = () => {
+          this.setState(prevState => ({
+            answerIsCorrect: prevState.randomNumberOfStars === prevState.selectedNumbers.reduce((total, item) => total + item, 0)
+          }));
+        };
+        
+        // Function to accept your answer
+        // After you've already checked your answer, this submits it
+        // Clears the state so that your used numbers are added, the selected numbers is empty, the answer is not checked, and you get a new number of stars for the next round
+        // The second argument to setState is a callback function to be run after the state is updated
+        acceptAnswer = () => {
+          this.setState(prevState => ({
+            usedNumbers: prevState.usedNumbers.concat(prevState.selectedNumbers),
+            selectedNumbers: [],
+            answerIsCorrect: null,
+            randomNumberOfStars: Game.randomNumber()
+          }), this.updateDoneStatus);
+        };
+        
+        // Function to redraw in the event that you can't or don't want to submit an answer for the current number of stars
+        // Only runs if you haven't used all your redraws
+        // Similar to the acceptAnswer function in that it resets things and gives you a new random number of stars
+        // The second argument to setState is a callback function to be run after the state is updated
+        redraw = () => {
+          if (this.state.redraws === 0) { return; }
+          this.setState(prevState => ({
+            selectedNumbers: [],
+            answerIsCorrect: null,
+            randomNumberOfStars: Game.randomNumber(),
+            redraws: prevState.redraws - 1
+          }), this.updateDoneStatus);
+        };
+        
+        // Function to search for possible solutions
+        // Takes the random number of stars and your used numbers and finds what numbers you have left
+        // Then uses the possibleCombinationSum function defined above to find if you have any possible solutions and returns true or false
+        possibleSolutions = ({randomNumberOfStars, usedNumbers}) => {
+          const possibleNumbers = _.range(1,10).filter(number =>
+            usedNumbers.indexOf(number) === -1
+          );
+          
+          return possibleCombinationSum(possibleNumbers, randomNumberOfStars);
+        }
+        
+        // Function to reset the game after you've won or lost
+        // Sets the state using the initialState function we defined earlier
+        resetGame = () => this.setState(Game.initialState());
+        
+        // Function to update whether or not you've won or lost
+        updateDoneStatus = () => {
+          this.setState(prevState => {
+            if (prevState.usedNumbers.length === 9) {
+              return { doneStatus: 'You Win!' };
+            }
+            if (prevState.redraws === 0 && !this.possibleSolutions(prevState)) {
+              return { doneStatus: 'Game Over!' };
+            }
+          })
+        };
+        
+        // Render function that returns the actual content to be shown for the Game component
+        // Const at the beginning to create a shorthand for accessing the state contents that will be passed as properties to the child components
+        // Returns the div containing all the other smaller components that Game renders
+        // DoneFrame and Numbers are wrapper in a ternary operator to only show one or the other based on the value of doneStatus
+        render () {
+          const {
+            selectedNumbers,
+            randomNumberOfStars,
+            answerIsCorrect,
+            usedNumbers,
+            redraws,
+            doneStatus
+          } = this.state;
+          
+          return (
+            <div className="container">
+              <h3>Play Nine</h3>
+              <hr />
+              <div className="row">
+                <Stars numberOfStars={randomNumberOfStars} />
+                <Button selectedNumbers={selectedNumbers}
+                        checkAnswer={this.checkAnswer}
+                        answerIsCorrect={answerIsCorrect}
+                        acceptAnswer={this.acceptAnswer}
+                        redraw={this.redraw}
+                        redraws={redraws}
+                        doneStatus={doneStatus} />
+                <Answer selectedNumbers={selectedNumbers}
+                        unselectNumber={this.unselectNumber} />
+              </div>
+              <br />
+              {doneStatus ?
+              <DoneFrame doneStatus={doneStatus}
+                          resetGame={this.resetGame} /> : 
+              <Numbers selectedNumbers={selectedNumbers}
+                        selectNumber={this.selectNumber}
+                        usedNumbers={usedNumbers} />
+              }
+            </div>
+          );
+        }
+      }
+
+      // Class component to render the whole app
+      // In this case it only renders the Game, but it's possible you could have some header or footer content you'd also like to render that should be part of the app
+      class App extends React.Component {
+        render () {
+          return (
+            <div>
+              <Game />
+            </div>
+          );
+        }
+      }
+
+      // This is where all the content we've been working on actually gets put into the DOM
+      // First argument is the componenet to render
+      // Second argument is where you want to render it (this assumes you have a mountNode element)
+      // Otherwise you would just use vanilla JS to get an element, like a root div
+      // Ex. document.getElementById('root') if you have an element with an id of root
+      // Note it's bad practice to attach your React app directly to the entire document.body
+      ReactDOM.render(<App />, document.getElementById('root'));
+
+    </script>
+  </body>
+</html>
